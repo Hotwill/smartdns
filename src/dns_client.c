@@ -469,7 +469,7 @@ static struct dns_server_group *_dns_client_get_group(const char *group_name)
 	struct dns_server_group *group = NULL;
 	struct hlist_node *tmp = NULL;
 
-	if (group_name == NULL) {
+	if (group_name == NULL || group_name[0] == '\0') {
 		return NULL;
 	}
 

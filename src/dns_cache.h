@@ -24,6 +24,7 @@
 #include "hash.h"
 #include "hashtable.h"
 #include "list.h"
+#include "dns_conf.h"
 #include <stdlib.h>
 #include <time.h>
 
@@ -85,6 +86,7 @@ struct dns_cache_info {
 	int hitnum_update_add;
 	time_t insert_time;
 	dns_type_t qtype;
+	char group[DNS_GROUP_NAME_LEN];
 };
 
 struct dns_cache_record {
@@ -121,9 +123,9 @@ struct dns_cache_data *dns_cache_new_data_packet(uint32_t cache_flag, void *pack
 
 int dns_cache_init(int size, int enable_inactive, int inactive_list_expired);
 
-int dns_cache_replace(char *domain, int ttl, dns_type_t qtype, int speed, struct dns_cache_data *cache_data);
+int dns_cache_replace(char *domain, int ttl, dns_type_t qtype, int speed, const char *group, struct dns_cache_data *cache_data);
 
-int dns_cache_insert(char *domain, int ttl, dns_type_t qtype, int speed, struct dns_cache_data *cache_data);
+int dns_cache_insert(char *domain, int ttl, dns_type_t qtype, int speed, const char *group, struct dns_cache_data *cache_data);
 
 struct dns_cache *dns_cache_lookup(char *domain, dns_type_t qtype);
 

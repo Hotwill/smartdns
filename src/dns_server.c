@@ -194,6 +194,7 @@ struct dns_request {
 	int passthrough;
 	int request_wait;
 	int prefetch;
+	char group[DNS_GROUP_NAME_LEN];
 	int dualstack_selection;
 
 	pthread_mutex_t ip_map_lock;
@@ -209,7 +210,7 @@ static struct dns_server server;
 
 static tlog_log *dns_audit;
 
-static int _dns_server_prefetch_request(char *domain, dns_type_t qtype, uint32_t server_flags);
+static int _dns_server_prefetch_request(char *domain, dns_type_t qtype, uint32_t server_flags, const char *group);
 
 static int _dns_server_forward_request(unsigned char *inpacket, int inpacket_len)
 {
@@ -766,12 +767,12 @@ static int _dns_server_request_update_cache(struct dns_request *request, dns_typ
 
 	/* if doing prefetch, update cache only */
 	if (request->prefetch) {
-		if (dns_cache_replace(request->domain, ttl, qtype, speed, cache_data) != 0) {
+		if (dns_cache_replace(request->domain, ttl, qtype, speed, request->group, cache_data) != 0) {
 			goto errout;
 		}
 	} else {
 		/* insert result to cache */
-		if (dns_cache_insert(request->domain, ttl, qtype, speed, cache_data) != 0) {
+		if (dns_cache_insert(request->domain, ttl, qtype, speed, request->group, cache_data) != 0) {
 			goto errout;
 		}
 	}
@@ -1138,6 +1139,7 @@ static struct dns_request *_dns_server_new_request(void)
 	request->ping_ttl_v4 = -1;
 	request->ping_ttl_v6 = -1;
 	request->prefetch = 0;
+	request->group[0] = '\0';
 	request->dualstack_selection = dns_conf_dualstack_ip_selection;
 	request->rcode = DNS_RC_SERVFAIL;
 	request->conn = NULL;
@@ -2484,7 +2486,7 @@ static int _dns_server_process_cache(struct dns_request *request)
 					if (request->conn == NULL) {
 						server_flags = dns_cache_get_cache_flag(dns_cache_A->cache_data);
 					}
-					_dns_server_prefetch_request(request->domain, request->qtype, server_flags);
+					_dns_server_prefetch_request(request->domain, request->qtype, server_flags, dns_cache->info.group);
 				}
 				ret = _dns_server_reply_SOA(DNS_RC_NOERROR, request);
 				goto out;
@@ -2525,7 +2527,7 @@ out_update_cache:
 		if (request->conn == NULL) {
 			server_flags = dns_cache_get_cache_flag(dns_cache->cache_data);
 		}
-		_dns_server_prefetch_request(request->domain, request->qtype, server_flags);
+		_dns_server_prefetch_request(request->domain, request->qtype, server_flags, dns_cache->info.group);
 	} else {
 		dns_cache_update(dns_cache);
 	}
@@ -2672,6 +2674,9 @@ static int _dns_server_do_query(struct dns_request *request, const char *domain,
 	if (group_name == NULL) {
 		group_name = dns_group;
 	}
+	if (request->group[0] == '\0' && group_name != NULL) {
+		safe_strncpy(request->group, group_name, DNS_GROUP_NAME_LEN);
+	}
 
 	_dns_server_set_dualstack_selection(request);
 
@@ -2714,7 +2719,7 @@ static int _dns_server_do_query(struct dns_request *request, const char *domain,
 		// Get reference for AAAA query
 		_dns_server_request_get(request);
 		request->request_wait++;
-		if (dns_client_query(request->domain, DNS_T_A, dns_server_resolve_callback, request, group_name) != 0) {
+		if (dns_client_query(request->domain, DNS_T_A, dns_server_resolve_callback, request, request->group) != 0) {
 			request->request_wait--;
 			_dns_server_request_release(request);
 		}
@@ -2723,7 +2728,7 @@ static int _dns_server_do_query(struct dns_request *request, const char *domain,
 	// Get reference for DNS query
 	request->request_wait++;
 	_dns_server_request_get(request);
-	if (dns_client_query(request->domain, qtype, dns_server_resolve_callback, request, group_name) != 0) {
+	if (dns_client_query(request->domain, qtype, dns_server_resolve_callback, request, request->group) != 0) {
 		request->request_wait--;
 		_dns_server_request_release(request);
 		tlog(TLOG_ERROR, "send dns request failed.");
@@ -2817,7 +2822,7 @@ errout:
 	return ret;
 }
 
-static int _dns_server_prefetch_request(char *domain, dns_type_t qtype, uint32_t server_flags)
+static int _dns_server_prefetch_request(char *domain, dns_type_t qtype, uint32_t server_flags, const char *group)
 {
 	int ret = -1;
 	struct dns_request *request = NULL;
@@ -2830,6 +2835,7 @@ static int _dns_server_prefetch_request(char *domain, dns_type_t qtype, uint32_t
 
 	request->server_flags = server_flags;
 	_dns_server_request_set_enable_prefetch(request);
+	safe_strncpy(request->group, group, DNS_GROUP_NAME_LEN);
 	ret = _dns_server_do_query(request, domain, qtype);
 	if (ret != 0) {
 		tlog(TLOG_ERROR, "do query %s failed.\n", domain);
@@ -3252,10 +3258,10 @@ static void _dns_server_prefetch_domain(struct dns_cache *dns_cache)
 	}
 
 	/* start prefetch domain */
-	tlog(TLOG_DEBUG, "prefetch by cache %s, qtype %d, ttl %d, hitnum %d", dns_cache->info.domain, dns_cache->info.qtype,
-		 dns_cache->info.ttl, hitnum);
+	tlog(TLOG_DEBUG, "prefetch by cache %s, qtype %d, ttl %d, hitnum %d, group %s", dns_cache->info.domain, dns_cache->info.qtype,
+		 dns_cache->info.ttl, hitnum, dns_cache->info.group);
 	if (_dns_server_prefetch_request(dns_cache->info.domain, dns_cache->info.qtype,
-									 dns_cache_get_cache_flag(dns_cache->cache_data)) != 0) {
+									 dns_cache_get_cache_flag(dns_cache->cache_data), dns_cache->info.group) != 0) {
 		tlog(TLOG_ERROR, "prefetch domain %s, qtype %d, failed.", dns_cache->info.domain, dns_cache->info.qtype);
 	}
 }

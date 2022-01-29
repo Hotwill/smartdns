@@ -237,7 +237,7 @@ struct dns_cache_data *dns_cache_new_data_packet(uint32_t cache_flag, void *pack
 	return (struct dns_cache_data *)cache_packet;
 }
 
-int dns_cache_replace(char *domain, int ttl, dns_type_t qtype, int speed, struct dns_cache_data *cache_data)
+int dns_cache_replace(char *domain, int ttl, dns_type_t qtype, int speed, const char *group, struct dns_cache_data *cache_data)
 {
 	struct dns_cache *dns_cache = NULL;
 	struct dns_cache_data *old_cache_data = NULL;
@@ -246,10 +246,14 @@ int dns_cache_replace(char *domain, int ttl, dns_type_t qtype, int speed, struct
 		return 0;
 	}
 
+	if (group == NULL) {
+		return -1;
+	}
+
 	/* lookup existing cache */
 	dns_cache = dns_cache_lookup(domain, qtype);
 	if (dns_cache == NULL) {
-		return dns_cache_insert(domain, ttl, qtype, speed, cache_data);
+		return dns_cache_insert(domain, ttl, qtype, speed, group, cache_data);
 	}
 
 	if (ttl < DNS_CACHE_TTL_MIN) {
@@ -264,6 +268,7 @@ int dns_cache_replace(char *domain, int ttl, dns_type_t qtype, int speed, struct
 	dns_cache->info.ttl = ttl;
 	dns_cache->info.speed = speed;
 	time(&dns_cache->info.insert_time);
+	safe_strncpy(dns_cache->info.group, group, DNS_GROUP_NAME_LEN);
 	old_cache_data = dns_cache->cache_data;
 	dns_cache->cache_data = cache_data;
 	list_del_init(&dns_cache->list);
@@ -324,11 +329,11 @@ errout:
 	return -1;
 }
 
-int dns_cache_insert(char *domain, int ttl, dns_type_t qtype, int speed, struct dns_cache_data *cache_data)
+int dns_cache_insert(char *domain, int ttl, dns_type_t qtype, int speed, const char *group, struct dns_cache_data *cache_data)
 {
 	struct dns_cache_info info;
 
-	if (cache_data == NULL || domain == NULL) {
+	if (cache_data == NULL || domain == NULL || group == NULL) {
 		return -1;
 	}
 
@@ -347,6 +352,7 @@ int dns_cache_insert(char *domain, int ttl, dns_type_t qtype, int speed, struct 
 	info.ttl = ttl;
 	info.hitnum_update_add = DNS_CACHE_HITNUM_STEP;
 	info.speed = speed;
+	safe_strncpy(info.group, group, DNS_GROUP_NAME_LEN);
 	time(&info.insert_time);
 
 	return _dns_cache_insert(&info, cache_data, &dns_cache_head.cache_list);
