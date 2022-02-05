@@ -282,6 +282,8 @@ int dns_cache_replace(char *domain, int ttl, dns_type_t qtype, int speed, const 
 
 int _dns_cache_insert(struct dns_cache_info *info, struct dns_cache_data *cache_data, struct list_head *head)
 {
+	tlog(TLOG_DEBUG, "cache used %d, capacity %d", dns_cache_head.num.counter, dns_cache_head.size);
+
 	uint32_t key = 0;
 	struct dns_cache *dns_cache = NULL;
 
@@ -772,4 +774,12 @@ void dns_cache_destroy(void)
 	pthread_mutex_unlock(&dns_cache_head.lock);
 
 	pthread_mutex_destroy(&dns_cache_head.lock);
+}
+
+void dns_cache_update_group(struct dns_cache *dns_cache, const char *group)
+{
+	pthread_mutex_lock(&dns_cache_head.lock);
+	tlog(TLOG_DEBUG, "update cache group, domain %s, old %s, new %s", dns_cache->info.domain, dns_cache->info.group, group);
+	safe_strncpy(dns_cache->info.group, group, DNS_GROUP_NAME_LEN);
+	pthread_mutex_unlock(&dns_cache_head.lock);
 }

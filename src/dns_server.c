@@ -2493,6 +2493,8 @@ static int _dns_server_process_cache(struct dns_request *request)
 			}
 		}
 		goto out;
+	} else {
+		dns_cache_update_group(dns_cache, request->group);
 	}
 
 	if (request->qtype != dns_cache->info.qtype) {
@@ -3251,15 +3253,15 @@ static void _dns_server_second_ping_check(struct dns_request *request)
 
 static void _dns_server_prefetch_domain(struct dns_cache *dns_cache)
 {
-	/* If there are still hits, continue pre-fetching */
+/*	*//* If there are still hits, continue pre-fetching *//*
 	int hitnum = dns_cache_hitnum_dec_get(dns_cache);
 	if (hitnum <= 0) {
 		return;
-	}
+	}*/
 
 	/* start prefetch domain */
 	tlog(TLOG_DEBUG, "prefetch by cache %s, qtype %d, ttl %d, hitnum %d, group %s", dns_cache->info.domain, dns_cache->info.qtype,
-		 dns_cache->info.ttl, hitnum, dns_cache->info.group);
+		 dns_cache->info.ttl, dns_cache->info.hitnum, dns_cache->info.group);
 	if (_dns_server_prefetch_request(dns_cache->info.domain, dns_cache->info.qtype,
 									 dns_cache_get_cache_flag(dns_cache->cache_data), dns_cache->info.group) != 0) {
 		tlog(TLOG_ERROR, "prefetch domain %s, qtype %d, failed.", dns_cache->info.domain, dns_cache->info.qtype);

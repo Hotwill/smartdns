@@ -162,6 +162,8 @@ int dns_cache_load(const char *file);
 
 int dns_cache_save(const char *file);
 
+void dns_cache_update_group(struct dns_cache *dns_cache, const char *group);
+
 #ifdef __cpluscplus
 }
 #endif
